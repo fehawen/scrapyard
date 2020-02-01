@@ -1,0 +1,342 @@
+#!/bin/bash
+
+# Foreground color
+TEXT_BLACK="$(tput setaf 0)"
+TEXT_RED="$(tput setaf 1)"
+TEXT_GREEN="$(tput setaf 2)"
+TEXT_YELLOW="$(tput setaf 3)"
+TEXT_BLUE="$(tput setaf 4)"
+TEXT_MAGENTA="$(tput setaf 5)"
+TEXT_CYAN="$(tput setaf 6)"
+TEXT_WHITE="$(tput setaf 7)"
+TEXT_GREY="$(tput setaf 8)"
+
+# Background color
+BG_BLACK="$(tput setab 0)"
+BG_RED="$(tput setab 1)"
+BG_GREEN="$(tput setab 2)"
+BG_YELLOW="$(tput setab 3)"
+BG_BLUE="$(tput setab 4)"
+BG_MAGENTA="$(tput setab 5)"
+BG_CYAN="$(tput setab 6)"
+BG_WHITE="$(tput setab 7)"
+BG_GREY="$(tput setab 8)"
+
+# Mode
+TEXT_BOLD="$(tput bold)"
+TEXT_UNDERLINE_BEGIN="$(tput smul)"
+TEXT_UNDERLINE_END="$(tput rmul)"
+
+# Reset all setab/setaf attributes
+RESET="$(tput sgr0)"
+
+# Foreground colors for prompt line (correct formatting, prevent overlapping)
+_BLACK="\[\033[0;30m\]"
+_RED="\[\033[0;31m\]"
+_GREEN="\[\033[0;32m"
+_YELLOW="\[\033[0;33m\]"
+_BLUE="\[\033[0;34m\]"
+_PURPLE="\[\033[0;35m\]"
+_CYAN="\[\033[0;36m\]"
+_BLACK="\[\033[0;30m\]"
+_WHITE="\[\033[0;37m\]"
+_GREY="\[\033[0;90m\]"
+_DEFAULTCOLOR="\[\033[39m\]"
+_NOCOLOR="\[\033[0m\]"
+
+# ICONS
+# Requires a Powerline font and the Font Awesome stack
+
+# Segment Separator
+SEPARATOR_RIGHT="\xEE\x82\xB0"
+SEPARATOR_LEFT="\xEE\x82\xB2"
+
+# Directory
+ICON_DIR="\xEF\x81\xBC"
+
+# User
+ICON_USER="\xEF\x84\x89"
+
+# Git
+ICON_GIT_BRANCH="\xEF\x84\xA6"
+ICON_GITHUB="\xEF\x82\x9B"
+ICON_BITBUCKET="\xEF\x85\xB1"
+ICON_GITLAB="\xEF\x8A\x96"
+ICON_GIT="\xEF\x87\x93"
+ICON_GIT_PREFIX="["
+ICON_GIT_SUFFIX="]"
+ICON_GIT_BRANCH_UNTRACKED="?"
+ICON_GIT_BRANCH_ADDED="+"
+ICON_GIT_BRANCH_MODIFIED="!"
+ICON_GIT_BRANCH_RENAMED="»"
+ICON_GIT_BRANCH_DELETED="x"
+ICON_GIT_BRANCH_STASHED="$"
+ICON_GIT_BRANCH_UNMERGED="="
+ICON_GIT_BRANCH_AHEAD="⇡"
+ICON_GIT_BRANCH_BEHIND="⇣"
+ICON_GIT_BRANCH_DIVERGED="⇕"
+
+# Package Version
+ICON_PACKAGE="\xEF\x81\xAB"
+ICON_NO_PACKAGE="\xEF\x81\xB1 "
+
+# Node
+ICON_NODE="\xEF\x90\x99"
+
+# Docker
+ICON_DOCKER="\xEF\x8E\x95"
+
+# Exit Status
+ICON_EXIT_OK="\xEF\x80\x8C"
+ICON_EXIT_BAD="\xEF\x80\x8D"
+
+# Prompt
+ICON_PROMPT="\xE2\x9E\x9C"
+
+command_exists() {
+	command -v $1 >/dev/null 2>&1
+}
+
+user_section() {
+	# whoami returns the OS user
+	# if you wish to return the ssh user, use $USER instead
+	local GET_USER=$(whoami)
+	local current_user
+
+	if [[ "$GET_USER" == "root" ]]; then
+		current_user="${BG_RED}${TEXT_BLACK} ${ICON_USER}  ${GET_USER} ${RESET}${TEXT_RED}${SEPARATOR_RIGHT}${RESET}"
+	else
+		current_user="${BG_BLUE}${TEXT_BLACK} ${ICON_USER}  ${GET_USER} ${RESET}${TEXT_BLUE}${SEPARATOR_RIGHT}${RESET}"
+	fi
+	
+	printf "${current_user}"
+}
+
+dir_section() {
+	local DIR=${PWD##*/} 
+	local current_directory
+
+	if [[ "$DIR" == "fehawen" ]]; then
+		current_directory="${ICON_DIR}  ~"
+	else
+		current_directory="${ICON_DIR}  ${DIR}"
+	fi
+
+	printf "${BG_YELLOW}${TEXT_BLACK}${SEPARATOR_RIGHT} ${current_directory} ${RESET}${TEXT_YELLOW}${SEPARATOR_RIGHT}${RESET}"
+}
+
+
+is_git_repository() {
+	command git rev-parse --is-inside-work-tree &>/dev/null
+}
+
+git_section() {
+	is_git_repository || return
+
+	local BRANCH=$(git branch 2>/dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/\1/')
+	local git_branch=""
+
+	if [[ "$BRANCH" == "" ]]; then
+		git_branch="${ICON_GIT_BRANCH} n/a"
+	else
+		git_branch="${ICON_GIT_BRANCH} ${BRANCH}"
+	fi
+
+	local STATUS=$(command git status --porcelain -b 2>/dev/null)
+	local git_status=""
+
+	# Check for untracked files
+	if $(echo "$STATUS" | command grep -E '^\?\? ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_UNTRACKED}${git_status}"
+	fi
+
+	# Check for staged files
+	if $(echo "$STATUS" | command grep '^A[ MDAU] ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_ADDED}${git_status}"
+	elif $(echo "$STATUS" | command grep '^M[ MD] ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_ADDED}${git_status}"
+	elif $(echo "$STATUS" | command grep '^UA' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_ADDED}${git_status}"
+	fi
+
+	# Check for modified files
+	if $(echo "$STATUS" | command grep '^[ MARC]M ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_MODIFIED}${git_status}"
+	fi
+
+	# Check for renamed files
+	if $(echo "$STATUS" | command grep '^R[ MD] ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_RENAMED}${git_status}"
+	fi
+
+	# Check for deleted files
+	if $(echo "$STATUS" | command grep '^[MARCDU ]D ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_DELETED}${git_status}"
+	elif $(echo "$STATUS" | command grep '^D[ UM] ' &>/dev/null); then
+		git_status="$ICON_GIT_BRANCH_DELETED${git_status}"
+	fi
+
+	# Check for stashes
+	if $(command git rev-parse --verify refs/stash >/dev/null 2>&1); then
+		git_status="${ICON_GIT_BRANCH_STASHED}${git_status}"
+	fi
+
+	# Check for unmerged files
+	if $(echo "$STATUS" | command grep '^U[UDA] ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_UNMERGED}${git_status}"
+	elif $(echo "$STATUS" | command grep '^AA ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_UNMERGED}${git_status}"
+	elif $(echo "$STATUS" | command grep '^DD ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_UNMERGED}${git_status}"
+	elif $(echo "$STATUS" | command grep '^[DA]U ' &>/dev/null); then
+		git_status="${ICON_GIT_BRANCH_UNMERGED}${git_status}"
+	fi
+
+	# Check if branch is ahead
+	local is_ahead=false
+	if $(echo "$STATUS" | command grep '^## [^ ]\+ .*ahead' &>/dev/null); then
+		is_ahead=true
+	fi
+
+	# Check if branch is behind
+	local is_behind=false
+	if $(echo "$STATUS" | command grep '^## [^ ]\+ .*behind' &>/dev/null); then
+		is_behind=true
+	fi
+
+	# Check if branch has diverged
+	if [[ "$is_ahead" == true && "$is_behind" == true ]]; then
+		git_status="${ICON_GIT_BRANCH_DIVERGED}${git_status}"
+	else
+		[[ "$is_ahead" == true ]] && git_status="${ICON_GIT_BRANCH_AHEAD}${git_status}"
+		[[ "$is_behind" == true ]] && git_status="${ICON_GIT_BRANCH_BEHIND}${git_status}"
+	fi
+
+	local git_branch_spaced git_status_spaced
+
+	if [[ "$git_branch" == "" ]]; then 
+		git_branch_spaced=""
+	else
+		git_branch_spaced=" ${git_branch} "
+	fi
+
+	if [[ "$git_status" == "" ]]; then 
+		git_status_spaced=""
+	else
+		git_status_spaced="${ICON_GIT_PREFIX}${git_status}${ICON_GIT_SUFFIX} "
+	fi
+
+	printf "${BG_MAGENTA}${TEXT_BLACK}${SEPARATOR_RIGHT}${git_branch_spaced}${git_status_spaced}${RESET}${TEXT_MAGENTA}${SEPARATOR_RIGHT}${RESET}"
+}
+
+package_section() {
+	[[ -f package.json ]] || return
+
+	command_exists npm || return
+
+	local package_version=$(grep -E '"version": "v?([0-9]+\.){1,}' package.json | cut -d\" -f4 2>/dev/null)
+
+	if [ ! "$package_version" ]; then
+		package_version="${ICON_NO_PACKAGE}"
+	else
+		package_version="${ICON_PACKAGE} v${package_version}"
+	fi
+
+	printf "${BG_YELLOW}${TEXT_BLACK}${SEPARATOR_RIGHT} ${package_version} ${RESET}${TEXT_YELLOW}${SEPARATOR_RIGHT}${RESET}"
+}
+
+node_section() {
+	is_git_repository || [[ -f package.json || -d node_modules ]] || return
+
+	local node_version
+
+	if command_exists nvm; then
+		node_version=$(nvm current 2>/dev/null)
+	elif command_exists nodenv; then
+		node_version=$(nodenv version-name)
+	elif command_exists node; then
+		node_version=$(node -v 2>/dev/null)
+	else
+		return
+	fi
+
+	local node_version_output
+
+	if [[ $node_version == "" ]]; then
+		node_version_output=""
+	else
+		node_version_output="${ICON_NODE}  ${node_version}"
+	fi
+
+	printf "${BG_GREEN}${TEXT_BLACK}${SEPARATOR_RIGHT} ${node_version_output} ${RESET}${TEXT_GREEN}${SEPARATOR_RIGHT}${RESET}"
+}
+
+docker_section() {
+	command_exists docker || return
+
+	local DOCKER_PS=$(docker ps -q --format "{{.ID}}" | wc -l 2>/dev/null)
+
+	local docker_ps_count=$(echo ${DOCKER_PS} | sed -E "s/[[:space:]]+/ /g")
+	local docker_output="ps[${docker_ps_count}]"
+
+	if [[ "$docker_ps_count" == "0" ]]; then
+		return
+	else
+		printf "${BG_CYAN}${TEXT_BLACK}${SEPARATOR_RIGHT} ${ICON_DOCKER}  ${docker_output} ${RESET}${TEXT_CYAN}${SEPARATOR_RIGHT}${RESET}"
+	fi
+}
+
+kube_section() {
+	command_exists kubectl || return
+
+	local kube_context=$(kubectl config current-context 2>/dev/null)
+
+	printf "${BG_CYAN}${TEXT_BLACK}${SEPARATOR_RIGHT} ${kube_context} ${RESET}${TEXT_CYAN}${SEPARATOR_RIGHT}${RESET}"
+}
+
+exit_section() {
+	local exit_code
+
+	if [[ $RETVAL -ne 0 ]]; then 
+		exit_code="${TEXT_RED} ${ICON_EXIT_BAD}"
+	else
+		exit_code="${TEXT_GREEN} ${ICON_EXIT_OK}"
+	fi
+
+	printf "${exit_code}"
+}
+
+submariner_prompt_first() {
+	RETVAL=$?
+	printf "$(user_section)$(dir_section)$(git_section)$(docker_section)$(exit_section)"
+}
+
+submariner_prompt_second() {
+	printf "${ICON_PROMPT} "
+}
+
+# Export PS1
+export PS1="\n\$(submariner_prompt_first)${_GREY}\n\$(submariner_prompt_second) ${_WHITE}"
+
+# Export PATH to include desired packages
+PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="~/.npm-global/bin:$PATH"
+
+alias gadd='git add'
+alias g+='git add'
+alias gcm='git commit -m'
+alias gpuom='git push -u origin master'
+alias gpom='git push origin master'
+alias gpuo='git push -u origin'
+alias gpo='git push origin'
+alias gp='git push'
+alias gstat='git status'
+alias gitme='git status'
+alias gfetch='git fetch'
+alias gbranch='git branch --list'
+alias gbranchr='git branch -r'
+alias gbranchv='git branch -v'
+alias gcheck='git checkout'
+alias gcheckb='git checkout -b'
+alias code='open -a "Visual Studio Code"'
+alias mongorun='mongod --dbpath ~/my_paths/mongodb-osx-x86_64-4.0.3/data'

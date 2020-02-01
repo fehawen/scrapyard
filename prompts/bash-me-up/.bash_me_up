@@ -1,0 +1,225 @@
+#!/bin/bash
+
+# MAIN COLORS
+# Note that the uppercase color codes differs slightly from
+# the lowercase in the functions,
+# due to the fact that these colors induce proper line-breaks,
+# whereas the lowercase color codes' syntax causes
+# the written commands to overlap each other upon line-break.
+_BLACK="\[\033[0;30m\]"
+_BLACKBOLD="\[\033[1;30m\]"
+_RED="\[\033[0;31m\]"
+_REDBOLD="\[\033[1;31m\]"
+_GREEN="\[\033[0;32m"
+_GREENBOLD="\[\033[1;32m\]"
+_YELLOW="\[\033[0;33m\]"
+_YELLOWBOLD="\[\033[1;33m\]"
+_BLUE="\[\033[0;34m\]"
+_BLUEBOLD="\[\033[1;34m\]"
+_PURPLE="\[\033[0;35m\]"
+_PURPLEBOLD="\[\033[1;35m\]"
+_CYAN="\[\033[0;36m\]"
+_CYANBOLD="\[\033[1;36m\]"
+_BLACK="\[\033[0;30m\]"
+_WHITE="\[\033[0;37m\]"
+_WHITEBOLD="\[\033[1;37m\]"
+_GREYBOLD="\[\033[1;90m\]"
+_DEFAULTCOLOR="\[\033[39m\]"
+_NOCOLOR="\[\033[0m\]"
+
+# FUNCTION COLORS
+# Color codes that work properly when called inside our functions
+red="\033[1;31m"
+green="\033[1;32m"
+yellow="\033[1;33m"
+blue="\033[1;34m"
+purple="\033[1;35m"
+cyan="\033[1;36m"
+white="\033[1;37m"
+grey="\033[1;90m"
+
+# ICONS
+# Note that these require Font Awesome included in the 
+# Hyper font stack in the hyper.js settings file
+ARROW="\xef\x81\xA1"
+ARROWUP="\xef\x80\x9B"
+ARROWDOWN="\xef\x80\x9A"
+FOLDER="\xef\x81\xBC"
+GITBRANCH="\xef\x84\xA6"
+NODE="\xef\x90\x99"
+NPM="\xef\x8F\x94"
+
+# Check if user is root (i.e. any sudo) and display a red file icon,
+# else display a blue file icon if the user isn't root
+function current_user() {
+	if [[ $(echo $USER) == "root" ]]  
+	then
+		echo -e "${red}${FOLDER}  "
+	else
+		echo -e "${cyan}${FOLDER}  "
+	fi
+}
+
+# Set the symbol display at each command line prompt
+function user_symbol() {
+  echo -e "${ARROW} "
+}
+
+# Display the current version of Node, if it's installed
+# Note that you have to include this in the 'init_all' function
+# below by adding '$(node_version)' in the desired order inside the
+# 'echo -e' output
+function node_version() {
+  local VERSION=`node -v 2>&1`
+  if [[ "$VERSION" =~ "bad option" ]] || [[ "$VERSION" =~ "command not found" ]] || [[ "$VERSION" == "" ]]
+  then
+  	exit
+  else
+  	echo -e "${green}${NODE}  ${VERSION}"
+  fi
+}
+
+# Display the current version of NPM, if it's installed
+# Note that you have to include this in the 'init_all' function
+# below by adding '$(npm_version)' in the desired order inside the
+# 'echo -e' output
+function npm_version() {
+	local VERSION=`npm --version 2>&1`
+	if [[ "$VERSION" =~ "bad option" ]] || [[ "$VERSION" =~ "command not found" ]] || [[ "$VERSION" == "" ]]
+	then
+		exit
+	else
+		echo -e "${red}${NPM}  ${VERSION}"
+	fi
+}
+
+# Output the current Git branch, if the folder is a Git repository 
+# This shows 'no branch' if we have a Git repository but no upstream
+function git_branch() {
+  local BRANCH=`git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/\1/'`
+  if [[ "$BRANCH" =~ "Not a git repository" ]] || [[ "$BRANCH" =~ "not a git repository" ]]
+  then
+  	exit
+	elif [[ "$BRANCH" = "" ]]
+	then
+		echo -e "${purple}${GITBRANCH} git-init/master"
+  else 
+    echo -e "${purple}${GITBRANCH} ${BRANCH}"
+  fi       
+}
+
+# Check if our local branch is ahead of
+# our remote upstream branch and display the count by how much
+# Note that we'll still display '0' but in yellow if there's an error,
+# e.g. if there's no upstream set etc, just for us to know.
+function branch_ahead() {
+	local BRANCH=`git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/\1/'`
+	local AHEAD=`git rev-list ${BRANCH}@{upstream}..${BRANCH} --count 2>&1`
+	if [[ "$AHEAD" == "" ]] || [[ "$AHEAD" =~ "fatal" ]]
+	then
+		echo -e "${blue}no"
+	elif [[ "$AHEAD" == "0" ]]
+	then
+		echo -e "${green}${ARROWUP} ${white}$AHEAD"
+	elif [[ "$AHEAD" > "0" ]]
+	then
+		echo -e "${red}${ARROWUP} ${white}$AHEAD"
+	else
+		echo -e "${red}!"
+	fi
+}
+
+# Check if our local currentbranch is behind of
+# our remote upstream branch and display the count by how much
+# Note that we'll still display '0' but in yellow if there's an error,
+# e.g. if there's no upstream set etc, just for us to know.
+function branch_behind() {
+	local BRANCH=`git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/\1/'`
+	local BEHIND=`git rev-list ${BRANCH}..${BRANCH}@{upstream} --count 2>&1`
+	if [[ "$BEHIND" == "" ]] || [[ "$BEHIND" =~ "fatal" ]]
+	then
+		echo -e "${blue}upstream set"
+	elif [[ "$BEHIND" == "0" ]]
+	then
+		echo -e "${green}${ARROWDOWN} ${white}$BEHIND"
+	elif [[ "$BEHIND" > "0" ]]
+	then
+		echo -e "${red}${ARROWDOWN} ${white}$BEHIND"
+	else 
+		echo -e "${red}?"
+	fi
+}
+
+# Output the local Git status of our files, based on whether we have
+# untracked files, changes to commit, or if our working tree is clean.
+function git_file_status() {
+	local STATUS=`git status 2>&1`
+	if [[ "$STATUS" =~ "Not a git repository" ]] || [[ "$STATUS" =~ "not a git repository" ]]
+	then
+		exit
+	elif [[ "$STATUS" =~ "Changes to be committed" ]] || [[ "$STATUS" =~ "changes to be committed" ]]
+	then
+		echo -e "${yellow}staged"
+	elif [[ "$STATUS" =~ "Untracked files" ]] || [[ "$STATUS" =~ "untracked files" ]]
+	then
+		echo -e "${red}untracked"
+	elif [[ "$STATUS" =~ "Changes not staged for commit" ]] || [[ "$STATUS" =~ "changes not staged for commit" ]]
+	then
+		echo -e "${red}unstaged"
+	elif [[ "$STATUS" =~ "Working tree clean" ]] || [[ "$STATUS" =~ "working tree clean" ]]
+	then 
+		echo -e "${green}clean"
+	else
+		echo -e "${cyan}unknown"
+	fi
+}
+
+# Here we include the desired functions to build our output
+# which we'll then pass into our PS1 export.
+# Note that we're starting with "on" in grey since in our PS1 we
+# echo current user (user or root) followed by the name of our
+# working directory only (not the whole path).
+function init_all() {
+  local BRANCH=`git branch 2>&1`
+  if [[ "$BRANCH" =~ "Not a git repository" ]] || [[ "$BRANCH" =~ "not a git repository" ]]
+  then
+      exit
+  else
+      echo -e "${grey}on $(git_branch) ${grey}at $(branch_ahead) $(branch_behind) ${grey}and $(git_file_status) ${grey}via $(node_version) ${grey}and $(npm_version)"
+  fi
+}
+
+# Building our output for out PS1 profile, including the full-path
+# colors to induce proper non-overlapping line breaks (as mentioned before).
+# the '\W' prints out the current working directory, and the '\012' forces a
+# line-break to have our command/prompt/whatever-it-is-called typed/written on
+# a new line, because that's the way I like it.
+# The ${WHITE} at the end sets the font color for whatever we're typing out ourselves,
+# but I'm not sure how/if our Hyper terminal's 'hyper.js' settings can somehow override
+# the color we set here in this file... Well, doesn't matter really. It works...
+export PS1="\$(current_user)${_YELLOWBOLD}\W \$(init_all) ${_GREENBOLD}\n\$(user_symbol) ${_WHITE}"
+
+# Export your path to include any directories you require for global access,
+# e.g. SASS, MongoDB, NPM packages, other fun stuff, or whatever it is.
+# You'll have to Google that shit yourself to learn more about the whole PATH thing,
+# I won't go into detail about it here.
+PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="~/.npm-global/bin:$PATH"
+# default path (for Mac users) is:
+# /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+alias gadd='git add'
+alias g+='git add'
+alias gcm='git commit -m'
+alias gpuom='git push -u origin master'
+alias gpom='git push origin master'
+alias gpuo='git push -u origin'
+alias gpo='git push origin'
+alias gp='git push'
+alias gstat='git status'
+alias gfetch='git fetch'
+alias gbranch='git branch --list'
+alias gbranchr='git branch -r'
+alias gbranchv='git branch -v'
+alias gcheck='git checkout'
+alias gcheckb='git checkout -b'
