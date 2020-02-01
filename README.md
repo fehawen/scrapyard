@@ -6,7 +6,7 @@
 
 ## About
 
-Scrapyard for dotfiles I no longer use but might need again one day.
+Scrapyard for dotfiles, scripts and snippets I no longer use but might need again one day.
 <br>
 <br>
 May the source be with them.
